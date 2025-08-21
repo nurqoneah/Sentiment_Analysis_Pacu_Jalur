@@ -187,12 +187,12 @@ def read_ids_from_csv(filename: str) -> List[str]:
 @click.version_option(version='2.0.0', prog_name='TikTok Comment Scraper')
 @click.option(
     "--input-file",
-    default='urls.csv',
+    default='tiktok_urls.csv',
     help='Input CSV file with TikTok video IDs'
 )
 @click.option(
     "--output",
-    default='data/tiktok/all_comments.csv',
+    default='data/tiktok/all_tiktok_comments.csv',
     help='Output file for all comments'
 )
 def main(input_file: str, output: str):

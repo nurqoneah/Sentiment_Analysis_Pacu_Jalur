@@ -1,42 +1,40 @@
-#!/usr/bin/env python3
-"""
-Instagram Comment Scraper - Consolidated Version
-Scrapes comments from Instagram posts and saves to CSV format
-"""
-
+# =================================================================================
+# Instagram Comment Scraper - Otomatisasi dari File CSV
+# =================================================================================
 import os
 import sys
 import json
 import requests
 import re
 import csv
-import click
 from loguru import logger
 from time import sleep
-from typing import List, Dict, Any
 
-# GraphQL Configuration
+# Konfigurasi GraphQL
 PARENT_QUERY_HASH = "97b41c52301f77ce508f55e66d17620e"
-REPLY_QUERY_HASH = "863813fb3a4d6501723f11d1e44a42b1"
+REPLY_QUERY_HASH = "863813fb3a4d6501723f11d1e44a42b1" # Query hash untuk replies
 COMMENTS_PER_PAGE = 50
 
-def read_post_ids_from_csv(filename: str) -> List[str]:
-    """Read post IDs from CSV file"""
+# --- Fungsi Pembantu ---
+
+def read_post_ids_from_csv(filename: str) -> list:
+    """Membaca daftar ID post dari file CSV."""
     ids = []
     try:
         with open(filename, 'r', newline='', encoding='utf-8') as csv_file:
             reader = csv.reader(csv_file)
-            next(reader, None)  # Skip header
+            # Lewati header jika ada
+            next(reader, None)
             for row in reader:
                 if row and row[0].strip():
                     ids.append(row[0].strip())
     except FileNotFoundError:
-        logger.error(f"Error: File '{filename}' not found.")
+        logger.error(f"Error: File '{filename}' tidak ditemukan.")
         return []
     return ids
 
-def build_headers(shortcode: str, cookies_str: str) -> Dict[str, str]:
-    """Build HTTP headers for API requests"""
+def build_headers(shortcode: str, cookies_str: str) -> dict:
+    """Membangun header HTTP untuk permintaan API."""
     return {
         "User-Agent": "Mozilla/5.0 (Linux; Android 13; SM-A125F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
         "Accept": "*/*",
@@ -47,8 +45,8 @@ def build_headers(shortcode: str, cookies_str: str) -> Dict[str, str]:
         "Cookie": cookies_str
     }
 
-def graphql_request(query_hash: str, variables: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
-    """Make GraphQL request to Instagram API"""
+def graphql_request(query_hash: str, variables: dict, headers: dict) -> dict:
+    """Melakukan permintaan GraphQL ke API Instagram."""
     var_str = json.dumps(variables, separators=(",", ":"))
     url = (
         f"https://www.instagram.com/graphql/query/"
@@ -58,14 +56,14 @@ def graphql_request(query_hash: str, variables: Dict[str, Any], headers: Dict[st
     
     try:
         r = requests.get(url, headers=headers)
-        r.raise_for_status()
+        r.raise_for_status() # Akan memunculkan HTTPError jika status code 4xx atau 5xx
         return r.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"[!] HTTP error for {query_hash}: {e}")
         return {}
 
-def fetch_replies(shortcode: str, comment_id: str, headers: Dict[str, str]) -> List[Dict[str, Any]]:
-    """Fetch replies for a main comment"""
+def fetch_replies(shortcode: str, comment_id: str, headers: dict) -> list:
+    """Mengambil balasan untuk komentar utama."""
     all_replies = []
     has_next = True
     cursor = ""
@@ -83,7 +81,7 @@ def fetch_replies(shortcode: str, comment_id: str, headers: Dict[str, str]) -> L
         try:
             edge_info = data.get("data", {}).get("comment", {}).get("edge_threaded_comments", {})
             if not edge_info:
-                logger.warning(f"No replies found for comment ID: {comment_id}")
+                logger.warning(f"Tidak ada balasan ditemukan untuk komentar ID: {comment_id}")
                 break
                 
             edges = edge_info.get("edges", [])
@@ -108,17 +106,17 @@ def fetch_replies(shortcode: str, comment_id: str, headers: Dict[str, str]) -> L
             break
             
         if has_next:
-            sleep(2)  # Rate limiting
+            sleep(2) # Jeda untuk menghindari rate limiting
             
     return all_replies
 
-def fetch_comments(shortcode: str, headers: Dict[str, str]) -> List[Dict[str, Any]]:
-    """Fetch main comments and replies from a post"""
+def fetch_comments(shortcode: str, headers: dict) -> list:
+    """Mengambil komentar utama dan balasan dari sebuah post."""
     all_comments = []
     has_next = True
     cursor = ""
     
-    logger.info(f"Starting to fetch comments for post {shortcode}...")
+    logger.info(f"Mulai mengambil komentar untuk post {shortcode}...")
     
     while has_next:
         vars = {"shortcode": shortcode, "first": COMMENTS_PER_PAGE}
@@ -127,14 +125,15 @@ def fetch_comments(shortcode: str, headers: Dict[str, str]) -> List[Dict[str, An
             
         data = graphql_request(PARENT_QUERY_HASH, vars, headers)
 
+        # Cek apakah data valid sebelum diproses
         if not data or not data.get("data", {}).get("shortcode_media", {}):
-            logger.error(f"Invalid data or failed request for post {shortcode}. Skipping.")
+            logger.error(f"Data tidak valid atau permintaan gagal untuk post {shortcode}. Melewatkan.")
             break
 
         try:
             edge_info = data.get("data", {}).get("shortcode_media", {}).get("edge_media_to_parent_comment", {})
             if not edge_info:
-                logger.warning(f"No main comments found for post {shortcode}")
+                logger.warning(f"Tidak ada komentar utama ditemukan untuk post {shortcode}")
                 break
             
             edges = edge_info.get("edges", [])
@@ -143,7 +142,7 @@ def fetch_comments(shortcode: str, headers: Dict[str, str]) -> List[Dict[str, An
                 if node:
                     parent_comment_id = node.get("id")
                     
-                    # Add main comment
+                    # Tambahkan komentar utama
                     all_comments.append({
                         "post_id": shortcode,
                         "parent_comment_id": parent_comment_id,
@@ -154,10 +153,10 @@ def fetch_comments(shortcode: str, headers: Dict[str, str]) -> List[Dict[str, An
                         "is_reply": False
                     })
                     
-                    # Check and fetch replies if any
+                    # Cek dan ambil balasan jika ada
                     child_comment_count = node.get("edge_threaded_comments", {}).get("count", 0)
                     if child_comment_count > 0:
-                        logger.info(f"Fetching {child_comment_count} replies for comment ID: {parent_comment_id}")
+                        logger.info(f"Mengambil {child_comment_count} balasan untuk komentar ID: {parent_comment_id}")
                         replies = fetch_replies(shortcode, parent_comment_id, headers)
                         all_comments.extend(replies)
             
@@ -170,83 +169,65 @@ def fetch_comments(shortcode: str, headers: Dict[str, str]) -> List[Dict[str, An
             break
 
         if has_next:
-            logger.info("Fetching next page of comments...")
-            sleep(2)  # Rate limiting
+            logger.info("Mengambil halaman komentar berikutnya...")
+            sleep(2) # Jeda untuk menghindari rate limiting
             
     return all_comments
 
-@click.command(help='Instagram Comment Scraper')
-@click.version_option(version='2.0.0', prog_name='Instagram Comment Scraper')
-@click.option(
-    "--input-file",
-    default='instagram_urls.csv',
-    help='Input CSV file with Instagram post IDs'
-)
-@click.option(
-    "--output",
-    default='data/instagram/all_comments.csv',
-    help='Output file for all comments'
-)
-@click.option(
-    "--sessionid",
-    required=True,
-    help='Instagram session ID cookie'
-)
-@click.option(
-    "--ds-user-id",
-    required=True,
-    help='Instagram ds_user_id cookie'
-)
-@click.option(
-    "--csrftoken",
-    required=True,
-    help='Instagram CSRF token cookie'
-)
-@click.option(
-    "--mid",
-    required=True,
-    help='Instagram mid cookie'
-)
-def main(input_file: str, output: str, sessionid: str, ds_user_id: str, csrftoken: str, mid: str):
-    """Main function to run Instagram comment scraper"""
+def main():
+    """Fungsi utama untuk menjalankan scraper."""
+    # KONFIGURASI COOKIE di sini
+    # GANTI DENGAN COOKIE ANDA YANG BARU DAN VALID
+    sessionid = "8900711295%3ACOeDeSGecWNZLK%3A9%3AAYf0g_IpxxhTmgjuUWX7Ne8gVjqUAi3KJJRehaD04Q"
+    ds_user_id = "8900711295"
+    csrftoken = "E5VPI5indmbps5COiHI7DI2LeH7vLA40"
+    mid = "aHSP6wALAAEGbmMHO65q6keKTGUT"
+    
     cookies_str = f"sessionid={sessionid}; ds_user_id={ds_user_id}; csrftoken={csrftoken}; mid={mid};"
     
-    # Read IDs from file
-    ids_to_scrape = read_post_ids_from_csv(input_file)
+    # Baca ID dari file
+    ids_to_scrape = read_post_ids_from_csv('instagram_urls.csv')
     
     if not ids_to_scrape:
-        logger.error(f"No post IDs found in {input_file}.")
+        logger.error("Tidak ada ID post yang ditemukan di urls.csv.")
         sys.exit(1)
         
     all_comments_data = []
 
     for post_id in ids_to_scrape:
-        logger.info(f"Processing post ID: {post_id}")
+        logger.info(f"Memproses post ID: {post_id}")
         headers = build_headers(post_id, cookies_str)
         comments = fetch_comments(post_id, headers)
         all_comments_data.extend(comments)
 
-    # Save data to CSV file
+    # Simpan data ke file CSV
     if all_comments_data:
-        # Create output directory if it doesn't exist
-        output_dir = os.path.dirname(output)
-        if output_dir and not os.path.exists(output_dir):
+        output_file = 'data/instagram/all_instagram_comments.csv'
+        
+        # Buat direktori jika belum ada
+        output_dir = os.path.dirname(output_file)
+        if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+        
+        # Tangani kasus di mana all_comments_data mungkin kosong
+        if not all_comments_data:
+            logger.warning("Tidak ada komentar yang berhasil diambil untuk disimpan.")
+            return
 
-        # Get all fieldnames from all dictionaries
+        # Dapatkan semua fieldnames dari semua kamus untuk memastikan tidak ada yang terlewat
         all_keys = set()
         for d in all_comments_data:
             all_keys.update(d.keys())
         fieldnames = sorted(list(all_keys))
 
-        with open(output, 'w', newline='', encoding='utf-8') as csv_file:
+        with open(output_file, 'w', newline='', encoding='utf-8') as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(all_comments_data)
         
-        logger.success(f"Successfully saved {len(all_comments_data)} comments to {output}")
+        logger.success(f"Berhasil menyimpan {len(all_comments_data)} komentar ke {output_file}")
     else:
-        logger.warning("No comments were successfully retrieved to save.")
-
+        logger.warning("Tidak ada komentar yang berhasil diambil untuk disimpan.")
+    
 if __name__ == "__main__":
     main()
