@@ -1,0 +1,39 @@
+😀: senang
+😃: senang
+😄: senang
+😁: senang
+😆: tertawa
+😅: tertawa
+🤣: tertawa
+😂: tertawa
+🙂: senyum
+😊: senyum
+😇: senyum
+😍: cinta
+🥰: cinta
+😘: cinta
+💕: cinta
+❤️: cinta
+😢: sedih
+😭: sedih
+😿: sedih
+💔: sedih
+😠: marah
+😡: marah
+🤬: marah
+💢: marah
+😱: kaget
+😨: takut
+😰: cemas
+🤔: bingung
+😕: bingung
+😐: biasa
+👍: bagus
+👎: jelek
+👏: tepuk tangan
+🔥: keren
+💯: sempurna
+✨: bagus
+🙏: terima kasih
+💪: kuat
+👌: oke
